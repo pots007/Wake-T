@@ -3,9 +3,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.constants as ct
 import aptools.data_analysis.beam_diagnostics as bd
-from wake_t.beamline_elements import PlasmaStage, PlasmaRamp, Drift
+import aptools.data_handling.conversion as dc
+from wake_t.beamline_elements import (PlasmaStage, PlasmaRamp, Drift,
+                                      Quadrupole, Dipole)
 from wake_t.driver_witness import LaserPulse
-from wake_t.utilities.bunch_generation import get_matched_bunch
+from wake_t.utilities.bunch_generation import get_matched_bunch, get_from_file
 
 def test_tracking():
     # bunch parameters
@@ -30,19 +32,61 @@ def test_tracking():
                       profile='inverse square')
     plasma = PlasmaStage(1e17, 8e-2)
     drift = Drift(10e-2)
+    quad = Quadrupole(0.2, 200)
+    dip = Dipole(0.2, 0.1)
+    dip2 = Dipole(0.2, -0.1)
     # start tracking
     bunch_list = list()
     bunch_list.append(copy.copy(bunch))
-    bunch_list.extend(upramp.track_beam_numerically_RK_parallel(bunch, 200))
-    bunch_list.extend(plasma.track_beam_numerically_RK_parallel(
-        laser, bunch, 'CustomBlowout', 200, lon_field=-3e10,
-        lon_field_slope=6.6e14, foc_strength=2.6e6))
-    bunch_list.extend(downramp.track_beam_numerically_RK_parallel(bunch, 200))
-    bunch_list.extend(drift.track_bunch(bunch, 50))
+    #bunch_list.extend(upramp.track_beam_numerically_RK_parallel(bunch, 200))
+    #bunch_list.extend(plasma.track_beam_numerically_RK_parallel(
+    #    laser, bunch, 'CustomBlowout', 200, lon_field=-3e10,
+    #    lon_field_slope=6.6e14, foc_strength=2.6e6))
+    #bunch_list.extend(downramp.track_beam_numerically_RK_parallel(bunch, 200))
+    bunch_list.extend(drift.track_bunch(bunch, 50, backtrack=True))
+    #bunch_list.extend(quad.track_bunch(bunch, 50, backtrack=True, order=2))
+    bunch_list.extend(dip.track_bunch(bunch, 50, backtrack=False, order=1))
+    bunch_list.extend(dip2.track_bunch(bunch, 50, backtrack=False, order=1))
+    bunch_list.extend(dip2.track_bunch(bunch, 50, backtrack=False, order=1))
+    bunch_list.extend(dip.track_bunch(bunch, 50, backtrack=False, order=1))
     #bunch_list.extend(plasma.track_beam_analytically(
     #    laser, bunch, 'CustomBlowout', 200, lon_field=-3e10, 
     #    lon_field_slope=6.6e14, foc_strength=2.6e6))
     # analyze data
+    last_bunch = bunch_list[-1]
+    #plt.hist2d(last_bunch.xi, last_bunch.y, bins=100)
+    #plt.show()
+    analyze_data(bunch_list)
+
+def create_reduced_beam():
+    # read beam
+    #file_path = "F:\\PhD\\Simulations_Data\\multistage_paper\\10pC\\3_chicane\\in\\beam_from_fbpic.fmt1"
+    file_path = "F:\\PhD\\Simulations_Data\\multistage_paper\\10pC\\3_chicane\\out\\end.fmt1"
+    file_path_new = 'C:\\Users\\Angel\\Desktop\\'
+    dc.convert_beam('csrtrack', 'csrtrack', file_path, file_path_new,
+                    'reduced_beam_end', n_part=50000)
+
+def test_transfer_maps():
+    file_path = "C:\\Users\\Angel\\Desktop\\reduced_beam.fmt1"
+    bunch = get_from_file(file_path, 'csrtrack')
+    dr1 = Drift(0.05)
+    dr2 = Drift(0.125)
+    dip = Dipole(0.2, 0.0114)
+    dip2 = Dipole(0.2, -0.0114)
+    bunch_list = list()
+    bunch_list.append(copy.copy(bunch))
+    bunch_list.extend(dr1.track_bunch(bunch, 10, backtrack=True))
+    bunch_list.extend(dip.track_bunch(bunch, 10, backtrack=False, order=2))
+    bunch_list.extend(dr2.track_bunch(bunch, 10, backtrack=False))
+    bunch_list.extend(dip2.track_bunch(bunch, 10, backtrack=False, order=2))
+    bunch_list.extend(dr1.track_bunch(bunch, 10, backtrack=False))
+    bunch_list.extend(dip2.track_bunch(bunch, 10, backtrack=False, order=2))
+    bunch_list.extend(dr2.track_bunch(bunch, 10, backtrack=False))
+    bunch_list.extend(dip.track_bunch(bunch, 10, backtrack=False, order=2))
+    bunch_list.extend(dr1.track_bunch(bunch, 10, backtrack=False))
+    
+    file_path = "C:\\Users\\Angel\\Desktop\\reduced_beam_end.fmt1"
+    bunch2 = get_from_file(file_path, 'csrtrack')
     analyze_data(bunch_list)
 
 def analyze_data(beam_list):
@@ -91,7 +135,7 @@ def analyze_data(beam_list):
             beam.xi, beam.px, beam.py, beam.pz, w=beam.q)
         ene_sp_sl[i] = np.average(enespls, weights=sl_w)
         em_x[i] = bd.normalized_transverse_rms_emittance(
-            beam.x, beam.px, w=beam.q)
+            beam.x, beam.px, beam.py, beam.pz, disp_corrected=True, w=beam.q)
         em_y[i] = bd.normalized_transverse_rms_emittance(
             beam.y, beam.py, w=beam.q)
         emsx, sl_w, _ = bd.normalized_transverse_rms_slice_emittance(
@@ -154,4 +198,5 @@ def analyze_data(beam_list):
     plt.show()
 
 if __name__ == '__main__':
-    test_tracking()
+    #create_reduced_beam()
+    test_transfer_maps()

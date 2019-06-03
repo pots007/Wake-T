@@ -28,7 +28,7 @@ class Wakefield():
 class CustomBlowoutWakefield(Wakefield):
     def __init__(self, n_p, driver, beam_center, lon_field=None,
                  lon_field_slope=None, foc_strength=None,
-                 field_offset=0):
+                 field_offset=0, parabolic_profile=False, w_match=40e-6):
         """
         [n_p] = cm^-3
         """
@@ -36,6 +36,8 @@ class CustomBlowoutWakefield(Wakefield):
         self.xi_c = beam_center	
         self.field_off = field_offset
         self.driver = driver
+        self.parabolic_profile = parabolic_profile
+        self.w_match = w_match
         self._calculate_base_quantities(lon_field, lon_field_slope,
                                         foc_strength)
 
@@ -46,12 +48,23 @@ class CustomBlowoutWakefield(Wakefield):
         self.E_z_p = lon_field_slope
         self.l_c = self.driver.xi_c
         self.b_w = self.driver.get_group_velocity(self.n_p*1e-6)
+        self.parabolic_ct = ct.pi*2.8179403227e-15*self.w_match**4*self.n_p
+        print(self.parabolic_ct)
+        print(self.b_w)
 
     def Wx(self, x, y, xi, px, py, pz, gamma, t):
-        return ct.c*self.g_x*x
+        g_x = self.g_x
+        if self.parabolic_profile:
+            r2 = x**2 + y**2
+            g_x = g_x * (1 + r2/self.parabolic_ct)
+        return ct.c*g_x*x
 
     def Wy(self, x, y, xi, px, py, pz, gamma, t):
-        return ct.c*self.g_x*y
+        g_x = self.g_x
+        if self.parabolic_profile:
+            r2 = x**2 + y**2
+            g_x = g_x * (1 + r2/self.parabolic_ct)
+        return ct.c*g_x*y
 
     def Wz(self, x, y, xi, px, py, pz, gamma, t):
         return self.E_z_0 + self.E_z_p*(xi - self.field_off - self.xi_c

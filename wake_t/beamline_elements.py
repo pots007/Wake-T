@@ -82,8 +82,9 @@ class PlasmaStage():
             self, laser, beam, mode, steps, simulation_code=None,
             simulation_path=None, time_step=None, auto_update_fields=False,
             reverse_tracking=False, laser_pos_in_pic_code=None, lon_field=None,
-            lon_field_slope=None, foc_strength=None, field_offset=0,
-            filter_fields=False, filter_sigma=20, n_proc=None):
+            lon_field_slope=None, foc_strength=None, parabolic_profile=False,
+            w_match=40e-6, field_offset=0, filter_fields=False,
+            filter_sigma=20, n_proc=None):
         """
         Track the beam through the plasma using a 4th order Runge-Kutta method.
         
@@ -166,7 +167,8 @@ class PlasmaStage():
         if mode == "CustomBlowout":
             WF = CustomBlowoutWakefield(
                 self.n_p, laser, np.average(beam.xi, weights=beam.q), 
-                lon_field, lon_field_slope, foc_strength, field_offset)
+                lon_field, lon_field_slope, foc_strength, field_offset,
+                parabolic_profile=parabolic_profile, w_match=w_match)
         elif mode == "FromPICCode":
             WF = WakefieldFromPICSimulation(
                 simulation_code, simulation_path, laser, time_step, self.n_p,
@@ -233,7 +235,7 @@ class PlasmaStage():
         gamma = self._gamma(beam.px, beam.py, beam.pz)
         #Kx = WF.Kx(
         #    beam.x, beam.y, beam.xi, beam.px, beam.py, beam.pz, gamma, 0)
-        k_x = ge.plasma_focusing_gradient_blowout(self.n_p)
+        k_x = ge.plasma_focusing_gradient_blowout(self.n_p*1e-6)
         #mean_Kx = np.average(Kx, weights=beam.q)
         mean_gamma = np.average(gamma, weights=beam.q)
         w_x = np.sqrt(ct.e*ct.c/ct.m_e * k_x/mean_gamma)
